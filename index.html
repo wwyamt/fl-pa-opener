@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>FL Property Appraiser Opener</title>
 
-  <!-- PWA (recommended) -->
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#111827" />
 
@@ -20,13 +19,11 @@
       background: #000;
     }
 
-    /* Wolves background */
     body {
       background: #000 url("wolves.png") no-repeat center center fixed;
       background-size: cover;
     }
 
-    /* Small “app” panel like your original */
     .panel {
       width: 260px;
       margin: 16px;
@@ -36,6 +33,10 @@
       border: 1px solid rgba(255,255,255,.10);
       box-shadow: 0 12px 30px rgba(0,0,0,.35);
       backdrop-filter: blur(4px);
+
+      /* makes sure inputs render above any weird overlays */
+      position: relative;
+      z-index: 10;
     }
 
     .title {
@@ -53,4 +54,138 @@
     }
 
     input, button {
+      display: block;
       width: 100%;
+      box-sizing: border-box;
+      border-radius: 10px;
+      border: 2px solid rgba(255,255,255,.30);
+      background: rgba(17,24,39,.92);
+      color: #fff;
+      padding: 10px;
+      font-size: 14px;
+      outline: none;
+
+      position: relative;
+      z-index: 20;
+    }
+
+    input::placeholder { color: rgba(255,255,255,.65); }
+
+    button {
+      margin-top: 8px;
+      cursor: pointer;
+      background: rgba(31,41,55,.92);
+      border-color: rgba(255,255,255,.22);
+    }
+    button:hover { background: rgba(55,65,81,.95); }
+
+    .status {
+      margin-top: 8px;
+      font-size: 11px;
+      line-height: 1.35;
+      color: rgba(229,231,235,.85);
+      min-height: 28px;
+    }
+
+    .ok { color: #a7f3d0; }
+    .warn { color: #fcd34d; }
+    .err { color: #fecaca; }
+  </style>
+</head>
+
+<body>
+  <div class="panel">
+    <div class="title">FL Property Appraiser</div>
+    <div class="sub">Paste a Florida address. County will auto-detect and open the PA site.</div>
+
+    <input id="address" placeholder="123 Main St, Riverview, FL 33579" autocomplete="off" />
+    <button id="openBtn">Open Property Appraiser</button>
+
+    <div class="status" id="status"></div>
+  </div>
+
+  <script>
+    function normCountyName(countyRaw) {
+      return (countyRaw || "")
+        .toLowerCase()
+        .replace(/\s+county\s*$/, "")
+        .trim();
+    }
+
+    // You can add all counties here later; this fixes Hillsborough right now.
+    const COUNTY_PA_URLS = {
+      hillsborough: "https://gis.hcpafl.org/propertysearch/",
+      pasco: "https://pascopa.com/property-search/",
+      pinellas: "https://www.pcpao.gov/",
+      polk: "https://www.polkpa.org/",
+      manatee: "https://www.manateepao.com/",
+      duval: "https://paopropertysearch.coj.net/",
+      osceola: "https://search.property-appraiser.org/",
+      lee: "https://www.leepa.org/",
+      orange: "https://www.ocpafl.org/",
+      palmbeach: "https://pbcpao.gov/"
+    };
+
+    // Official fallback (NOT Google)
+    const OFFICIAL_DIRECTORY_URL = "https://floridarevenue.com/property/Pages/LocalOfficials.aspx";
+
+    const statusEl = document.getElementById("status");
+    const addrEl = document.getElementById("address");
+
+    function setStatus(text, cls) {
+      statusEl.className = "status " + (cls || "");
+      statusEl.textContent = text;
+    }
+
+    async function geocodeCounty(address) {
+      const url =
+        "https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=1&q=" +
+        encodeURIComponent(address + ", Florida");
+
+      const res = await fetch(url, { headers: { "Accept": "application/json" } });
+      if (!res.ok) throw new Error("Geocode failed: " + res.status);
+
+      const data = await res.json();
+      return data?.[0]?.address?.county || "";
+    }
+
+    async function openPA() {
+      const addr = addrEl.value.trim();
+      if (!addr) return setStatus("Please enter an address.", "warn");
+
+      setStatus("Detecting county…");
+
+      try {
+        const countyRaw = await geocodeCounty(addr);
+        if (!countyRaw) {
+          setStatus("Could not detect county. Opening official directory…", "warn");
+          return window.open(OFFICIAL_DIRECTORY_URL, "_blank", "noopener,noreferrer");
+        }
+
+        const key = normCountyName(countyRaw);
+        const url = COUNTY_PA_URLS[key];
+
+        if (url) {
+          setStatus(`Opening ${countyRaw}…`, "ok");
+          return window.open(url, "_blank", "noopener,noreferrer");
+        }
+
+        setStatus(`${countyRaw} not mapped yet. Opening official directory…`, "warn");
+        return window.open(OFFICIAL_DIRECTORY_URL, "_blank", "noopener,noreferrer");
+
+      } catch (e) {
+        setStatus("Error detecting county. Opening official directory…", "err");
+        return window.open(OFFICIAL_DIRECTORY_URL, "_blank", "noopener,noreferrer");
+      }
+    }
+
+    document.getElementById("openBtn").addEventListener("click", openPA);
+    addrEl.addEventListener("keydown", (e) => { if (e.key === "Enter") openPA(); });
+
+    // Service worker (optional)
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("./sw.js").catch(() => {});
+    }
+  </script>
+</body>
+</html>
