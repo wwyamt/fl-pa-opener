@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FL Property Appraiser</title>
+<link rel="manifest" href="manifest.json">
+<style>
+body {
+  margin: 0;
+  background: #000 url("wolves.png") no-repeat center center fixed;
+  background-size: cover;
+  font-family: system-ui, sans-serif;
+}
+.app {
+  width: 260px;
+  margin: 20px;
+  background: rgba(0,0,0,.6);
+  padding: 12px;
+  border-radius: 10px;
+  color: #fff;
+}
+input, button {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: 6px;
+  border: none;
+}
+button {
+  background: #1f2937;
+  color: white;
+  cursor: pointer;
+}
+.status {
+  margin-top: 8px;
+  font-size: 12px;
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <input id="address" placeholder="Enter Florida address">
+  <button onclick="openPA()">Open Property Appraiser</button>
+  <div class="status" id="status"></div>
+</div>
+
+<script>
+async function openPA() {
+  const addr = document.getElementById("address").value.trim();
+  const status = document.getElementById("status");
+
+  if (!addr) {
+    status.textContent = "Please enter an address.";
+    return;
+  }
+
+  status.textContent = "Detecting county…";
+
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(addr + ", Florida")}`,
+      { headers: { "User-Agent": "FL-PA-App" } }
+    );
+    const data = await res.json();
+
+    const county = data[0]?.address?.county;
+    if (!county) throw new Error();
+
+    const clean = county.replace(" County", "").toLowerCase();
+    const urls = {
+      hillsborough: "https://www.hcpafl.org/Property-Search",
+      pinellas: "https://www.pcpao.gov/search",
+      pasco: "https://pascopa.com/property-search/",
+      polk: "https://www.polkpa.org/",
+      manatee: "https://www.manateepao.com/"
+    };
+
+    const url = urls[clean];
+    if (!url) throw new Error();
+
+    status.textContent = `Opening ${county}…`;
+    window.open(url, "_blank");
+
+  } catch {
+    status.textContent = "County not detected — opening search.";
+    window.open(
+      "https://www.google.com/search?q=" +
+      encodeURIComponent("Florida property appraiser " + addr),
+      "_blank"
+    );
+  }
+}
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js");
+}
+</script>
+</body>
+</html>
